@@ -1,0 +1,55 @@
+services:
+  web:
+    container_name: ontime-web
+    networks:
+      - default
+      - caddy_net
+
+networks:
+  caddy_net:
+    external: true
+    name: three-dollar-motel_default
+
+secrets:
+  postgres_owner_password:
+    file: ./secrets/postgres_owner_password
+  migration_database_url:
+    file: ./secrets/migration_database_url
+  app_database_url:
+    file: ./secrets/app_database_url
+  worker_database_url:
+    file: ./secrets/worker_database_url
+  monitor_database_url:
+    file: ./secrets/monitor_database_url
+  auth_secret:
+    file: ./secrets/auth_secret
+  booking_capability_secret:
+    file: ./secrets/booking_capability_secret
+  booking_capability_keyring:
+    file: ./secrets/booking_capability_keyring
+  token_encryption_key:
+    file: ./secrets/token_encryption_key
+  email_token_secret:
+    file: ./secrets/email_token_secret
+  tenant_context_secret:
+    file: ./secrets/tenant_context_secret
+  rate_limit_hash_secret:
+    file: ./secrets/rate_limit_hash_secret
+  proxy_shared_secret:
+    file: ./secrets/proxy_shared_secret
+  operator_health_secret:
+    file: ./secrets/operator_health_secret
+  google_client_secret:
+    file: ./secrets/google_client_secret
+  stripe_secret_key:
+    file: ./secrets/stripe_secret_key
+  stripe_webhook_secret:
+    file: ./secrets/stripe_webhook_secret
+  smtp_password:
+    file: ./secrets/smtp_password
+  postgres_server_cert:
+    file: ./secrets/postgres_server_cert
+  postgres_server_key:
+    file: ./secrets/postgres_server_key
+  postgres_ca_cert:
+    file: ./secrets/postgres_ca_cert
