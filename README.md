@@ -1,5 +1,3 @@
-<div align="center">
-  <img src="apps/web/public/images/ontime-watch.jpg" alt="On-Time" width="480" style="border-radius: 12px; filter: grayscale(100%) contrast(1.15);" />
 
   <h1>On-Time</h1>
   <p><strong>On Time all the time.</strong></p>
