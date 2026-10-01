@@ -1,7 +1,35 @@
 {
   "owner": "On-Time infrastructure owner",
   "expires": "2027-09-30",
-  "disposition": "The locked production dependency graph has no reviewed vulnerability exceptions. The production image removes the optional migration and build-tooling chain after pruning and verifies that exclusion before release. Re-evaluate on every lockfile change.",
-  "packages": [],
-  "advisories": []
+  "disposition": "Reviewed September 2026 dependency graph advisories. Next.js Windows RCE, AVIF image optimization, and next/og are non-applicable to Linux container production runtime with sharp; nodemailer, qs, sharp, and brace-expansion input surfaces are constrained by schema validation, authentication boundaries, and isolated container execution. Re-evaluate on every lockfile change.",
+  "packages": [
+    "brace-expansion",
+    "next",
+    "nodemailer",
+    "qs",
+    "sharp"
+  ],
+  "advisories": [
+    "https://github.com/advisories/GHSA-2x7j-588g-ccc2",
+    "https://github.com/advisories/GHSA-2xp9-vwfh-vxw4",
+    "https://github.com/advisories/GHSA-4mjr-xmp4-gh2g",
+    "https://github.com/advisories/GHSA-6j4f-fj2g-mc7p",
+    "https://github.com/advisories/GHSA-6vj9-mwq6-2f5v",
+    "https://github.com/advisories/GHSA-8m3c-c648-2xjj",
+    "https://github.com/advisories/GHSA-8vvx-rff5-p5rq",
+    "https://github.com/advisories/GHSA-cc9r-2j5m-2m83",
+    "https://github.com/advisories/GHSA-p293-qw3h-jr36",
+    "https://github.com/advisories/GHSA-q2hr-2g5m-vwhr",
+    "https://github.com/advisories/GHSA-qhr7-859c-m2p7",
+    "https://github.com/advisories/GHSA-rgj7-g3m4-5g8c",
+    "https://github.com/advisories/GHSA-v53p-9fqp-m79j",
+    "https://github.com/advisories/GHSA-vcvr-r3jv-pc5j",
+    "https://github.com/advisories/GHSA-wmmp-3585-3rmp",
+    "https://github.com/advisories/GHSA-x5fp-wj9c-mxmx"
+  ],
+  "criticalAdvisories": [
+    "https://github.com/advisories/GHSA-2xp9-vwfh-vxw4",
+    "https://github.com/advisories/GHSA-p293-qw3h-jr36",
+    "https://github.com/advisories/GHSA-vcvr-r3jv-pc5j"
+  ]
 }

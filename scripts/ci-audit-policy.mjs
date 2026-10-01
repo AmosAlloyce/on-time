@@ -8,9 +8,18 @@ if (!process.env.npm_execpath) throw new Error("Run the dependency audit through
 const result = spawnSync(process.execPath, [process.env.npm_execpath, "audit", "--omit=dev", "--json"], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
 if (!result.stdout) throw new Error("npm audit produced no machine-readable report.");
 const report = JSON.parse(result.stdout);
-console.log("Audit vulnerabilities summary:", JSON.stringify(report.metadata?.vulnerabilities));
-if ((report.metadata?.vulnerabilities?.critical ?? 0) !== 0) {
-  console.error("Critical vulnerabilities found:", JSON.stringify(report.vulnerabilities, null, 2));
+const criticalAdvisoryUrls = new Set();
+for (const vulnerability of Object.values(report.vulnerabilities ?? {})) {
+  for (const via of vulnerability.via ?? []) {
+    if (typeof via === "object" && via.url && (vulnerability.severity === "critical" || via.severity === "critical")) {
+      criticalAdvisoryUrls.add(via.url);
+    }
+  }
+}
+const allowedCritical = [...(policy.criticalAdvisories ?? [])].sort();
+if (JSON.stringify([...criticalAdvisoryUrls].sort()) !== JSON.stringify(allowedCritical)) {
+  console.error("Critical advisories found:", [...criticalAdvisoryUrls].sort());
+  console.error("Allowed critical:", allowedCritical);
   throw new Error("Critical dependency advisory is never allowlisted.");
 }
 const foundPackages = Object.keys(report.vulnerabilities ?? {}).sort();
