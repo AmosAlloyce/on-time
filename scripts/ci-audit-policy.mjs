@@ -8,10 +8,19 @@ if (!process.env.npm_execpath) throw new Error("Run the dependency audit through
 const result = spawnSync(process.execPath, [process.env.npm_execpath, "audit", "--omit=dev", "--json"], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
 if (!result.stdout) throw new Error("npm audit produced no machine-readable report.");
 const report = JSON.parse(result.stdout);
-if ((report.metadata?.vulnerabilities?.critical ?? 0) !== 0) throw new Error("Critical dependency advisory is never allowlisted.");
+console.log("Audit vulnerabilities summary:", JSON.stringify(report.metadata?.vulnerabilities));
+if ((report.metadata?.vulnerabilities?.critical ?? 0) !== 0) {
+  console.error("Critical vulnerabilities found:", JSON.stringify(report.vulnerabilities, null, 2));
+  throw new Error("Critical dependency advisory is never allowlisted.");
+}
 const foundPackages = Object.keys(report.vulnerabilities ?? {}).sort();
 const allowedPackages = [...policy.packages].sort();
-if (JSON.stringify(foundPackages) !== JSON.stringify(allowedPackages)) throw new Error("Dependency vulnerability package set differs from the reviewed disposition.");
+if (JSON.stringify(foundPackages) !== JSON.stringify(allowedPackages)) {
+  console.error("Found packages:", foundPackages);
+  console.error("Allowed packages:", allowedPackages);
+  console.error("Vulnerabilities details:", JSON.stringify(report.vulnerabilities, null, 2));
+  throw new Error("Dependency vulnerability package set differs from the reviewed disposition.");
+}
 const advisoryUrls = new Set();
 for (const vulnerability of Object.values(report.vulnerabilities ?? {})) {
   for (const via of vulnerability.via ?? []) if (typeof via === "object" && via.url) advisoryUrls.add(via.url);
