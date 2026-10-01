@@ -40,10 +40,7 @@ function createDatabaseClient() {
   const require = createRequire(import.meta.url); const local = require("@prisma/client") as { PrismaClient: new () => PrismaClient };
   const client = new local.PrismaClient();
   if (process.env.NODE_ENV !== "production") {
-    Promise.allSettled([
-      client.$queryRawUnsafe("PRAGMA journal_mode = WAL;"),
-      client.$queryRawUnsafe("PRAGMA busy_timeout = 30000;"),
-    ]).catch(() => undefined);
+    client.$queryRawUnsafe("PRAGMA busy_timeout = 30000;").catch(() => undefined);
   }
   return client;
 }

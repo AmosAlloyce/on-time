@@ -26,7 +26,6 @@ function linkToken(text: string) { const match = text.match(/[?#&](?:token|recov
 describe("transactional email and recovery authority", () => {
   beforeAll(async () => {
     if (process.env.DATABASE_PROVIDER !== "postgresql") {
-      await db.$queryRawUnsafe("PRAGMA journal_mode = WAL;").catch(() => undefined);
       await db.$queryRawUnsafe("PRAGMA busy_timeout = 30000;").catch(() => undefined);
     }
   });

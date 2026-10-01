@@ -66,7 +66,7 @@
     "db:migrate:postgres": "node scripts/production-config.mjs migration && prisma migrate deploy --schema prisma/postgresql/schema.prisma",
     "db:migrate": "cross-env DATABASE_URL=file:./dev.db prisma migrate deploy",
     "db:seed": "cross-env DATABASE_URL=file:./dev.db tsx prisma/seed.ts",
-    "db:reset": "cross-env DATABASE_URL=file:./dev.db prisma migrate reset --force && node scripts/sqlite-wal.mjs"
+    "db:reset": "cross-env DATABASE_URL=file:./dev.db prisma migrate reset --force"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

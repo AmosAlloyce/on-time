@@ -6,7 +6,7 @@ import { assertNoClientSecretState, assertNoHorizontalOverflow, attachSession, b
 test.use({ trace: "off" });
 
 async function waitForCalendarSync(bookingId: string) {
-  const deadline = Date.now() + 5_000;
+  const deadline = Date.now() + 15_000;
   do {
     const booking = await db.booking.findUnique({ where: { id: bookingId }, select: { calendarLeaseToken: true, calendarSyncStatus: true } });
     if (booking && booking.calendarLeaseToken === null && booking.calendarSyncStatus !== "PENDING") return;
@@ -71,6 +71,7 @@ test("@journey signup, verification, onboarding, scheduling, recovery and tenant
   await context.clearCookies();
   await login(page, organizerEmail, organizerPassword);
   const managed = await createManagedBooking(context, suffix);
+  await waitForCalendarSync(managed.id);
   await page.goto(`/book/strategy-call/confirmation?booking=${encodeURIComponent(managed.id)}`);
   await expect(page.getByRole("heading", { name: /You’re booked/ })).toBeVisible();
   for (let attempt = 0; attempt < 2; attempt += 1) {

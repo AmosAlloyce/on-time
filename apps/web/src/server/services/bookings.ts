@@ -260,21 +260,31 @@ export async function rescheduleBooking(id: string, startAt: string, calendar: C
   if (!slots.some((slot) => new Date(slot.start).getTime() === requestedStart.getTime())) throw conflict("That time is no longer available.");
   if (mutationContext) enterDatabaseContext({ ...mutationContext, action: "booking_write" });
   let updated;
-  try {
-    updated = await db.$transaction(async (tx) => {
-      const mutationNow = new Date();
-      const won = await tx.booking.updateMany({ where: { id, mutationVersion: booking.mutationVersion, status: "CONFIRMED", OR: [{ calendarLeaseToken: null }, { calendarLeaseExpiresAt: { lte: mutationNow } }] }, data: { startAt: requestedStart, endAt: requestedEnd, manageExpiresAt: renewedManageExpiry, mutationVersion: { increment: 1 }, calendarLeaseToken: null, calendarLeaseExpiresAt: null, calendarSyncStatus: "PENDING", notificationStatus: "PENDING" } });
-      if (won.count !== 1) throw conflict("The booking changed while rescheduling. Refresh and choose a new time.");
-      await tx.bookingOccupancy.deleteMany({ where: { bookingId: id } });
-      await tx.bookingOccupancy.createMany({ data: occupiedMinutes(requestedStart, requestedEnd, booking.bufferBeforeMinutes, booking.bufferAfterMinutes).map((minuteStart) => ({ workspaceId: booking.workspaceId, bookingId: id, hostId: booking.hostId, minuteStart })) });
-      await tx.bookingManageSession.updateMany({ where: { bookingId: id, revokedAt: null }, data: { expiresAt: renewedManageExpiry } });
-      await tx.integrationOutbox.create({ data: { workspaceId: booking.workspaceId, bookingId: id, kind: "CALENDAR_UPDATE", bookingMutationVersion: booking.mutationVersion + 1, idempotencyKey: `calendar:update:${id}:${requestedStart.toISOString()}` } });
-      const result = await tx.booking.findUniqueOrThrow({ where: { id }, include: bookingInclude });
-      await enqueueBookingEmail(tx, result, "BOOKING_RESCHEDULED", mutationNow); return result;
-    });
-  } catch (error) {
-    if (providerErrorCode(error) === "P2002") throw conflict("That time was just booked. Choose another slot.");
-    throw error;
+  for (let leaseAttempt = 0; leaseAttempt < 4; leaseAttempt += 1) {
+    try {
+      updated = await db.$transaction(async (tx) => {
+        const mutationNow = new Date();
+        const won = await tx.booking.updateMany({ where: { id, mutationVersion: booking.mutationVersion, status: "CONFIRMED", OR: [{ calendarLeaseToken: null }, { calendarLeaseExpiresAt: { lte: mutationNow } }] }, data: { startAt: requestedStart, endAt: requestedEnd, manageExpiresAt: renewedManageExpiry, mutationVersion: { increment: 1 }, calendarLeaseToken: null, calendarLeaseExpiresAt: null, calendarSyncStatus: "PENDING", notificationStatus: "PENDING" } });
+        if (won.count !== 1) throw conflict("The booking changed while rescheduling. Refresh and choose a new time.");
+        await tx.bookingOccupancy.deleteMany({ where: { bookingId: id } });
+        await tx.bookingOccupancy.createMany({ data: occupiedMinutes(requestedStart, requestedEnd, booking.bufferBeforeMinutes, booking.bufferAfterMinutes).map((minuteStart) => ({ workspaceId: booking.workspaceId, bookingId: id, hostId: booking.hostId, minuteStart })) });
+        await tx.bookingManageSession.updateMany({ where: { bookingId: id, revokedAt: null }, data: { expiresAt: renewedManageExpiry } });
+        await tx.integrationOutbox.create({ data: { workspaceId: booking.workspaceId, bookingId: id, kind: "CALENDAR_UPDATE", bookingMutationVersion: booking.mutationVersion + 1, idempotencyKey: `calendar:update:${id}:${requestedStart.toISOString()}` } });
+        const result = await tx.booking.findUniqueOrThrow({ where: { id }, include: bookingInclude });
+        await enqueueBookingEmail(tx, result, "BOOKING_RESCHEDULED", mutationNow); return result;
+      });
+      break;
+    } catch (error) {
+      if (providerErrorCode(error) === "P2002") throw conflict("That time was just booked. Choose another slot.");
+      if (leaseAttempt < 3 && error instanceof AppError && error.code === "CONFLICT") {
+        const current = await db.booking.findUnique({ where: { id }, select: { calendarLeaseToken: true, mutationVersion: true, status: true } });
+        if (current?.status === "CONFIRMED" && current.mutationVersion === booking.mutationVersion && current.calendarLeaseToken !== null) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          continue;
+        }
+      }
+      throw error;
+    }
   }
   if (shouldDrainOutboxInline()) await processBookingOutbox(id);
   return mapBooking(updated);

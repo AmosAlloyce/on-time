@@ -30,6 +30,7 @@ const env = {
   PAYMENTS_PROVIDER: "stub",
   EMAIL_PROVIDER: "local",
   OUTBOX_WORKER_ENABLED: "true",
+  OUTBOX_POLL_INTERVAL_MS: "1000",
   HOST: "127.0.0.1",
   PORT: port,
   NEXT_DIST_DIR: ".next-playwright",
