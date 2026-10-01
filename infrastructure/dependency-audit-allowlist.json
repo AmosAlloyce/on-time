@@ -1,7 +1,7 @@
 {
   "owner": "On-Time infrastructure owner",
   "expires": "2027-09-30",
-  "disposition": "Reviewed September 2026 dependency graph advisories. Next.js Windows RCE, AVIF image optimization, and next/og are non-applicable to Linux container production runtime with sharp; nodemailer, qs, sharp, and brace-expansion input surfaces are constrained by schema validation, authentication boundaries, and isolated container execution. Re-evaluate on every lockfile change.",
+  "disposition": "The production image removes the optional migration and build-tooling chain after pruning and verifies that exclusion before release. Reviewed September 2026 dependency graph advisories. Next.js Windows RCE, AVIF image optimization, and next/og are non-applicable to Linux container production runtime with sharp; nodemailer, qs, sharp, and brace-expansion input surfaces are constrained by schema validation, authentication boundaries, and isolated container execution. Re-evaluate on every lockfile change.",
   "packages": [
     "brace-expansion",
     "next",
