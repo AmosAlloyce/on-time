@@ -70,7 +70,7 @@ function contextualClient(client: PrismaClient) {
               const txModel = activeContext.transaction[name] as Record<string, ((...inner: unknown[]) => unknown) | undefined>;
               const fn = txModel?.[String(method)];
               if (typeof fn === "function") {
-                return fn(...args);
+                return fn.apply(txModel, args);
               }
             }
             if (!activeContext) {
@@ -81,7 +81,7 @@ function contextualClient(client: PrismaClient) {
               const txModel = tx[name] as Record<string, ((...inner: unknown[]) => unknown) | undefined>;
               const operation = txModel?.[String(method)];
               if (typeof operation !== "function") throw new Error(`Unknown database operation ${name}.${String(method)}`);
-              return databaseContext.run({ ...activeContext, transaction: tx }, () => operation(...args));
+              return databaseContext.run({ ...activeContext, transaction: tx }, () => operation.apply(txModel, args));
             }, contextualTransactionOptions());
           };
         }
@@ -92,7 +92,7 @@ function contextualClient(client: PrismaClient) {
         const activeContext = currentDatabaseContext();
         if (activeContext?.transaction) {
           const fn = activeContext.transaction[name] as ((...inner: unknown[]) => unknown) | undefined;
-          if (typeof fn === "function") return fn(...args);
+          if (typeof fn === "function") return fn.apply(activeContext.transaction, args);
         }
         if (!activeContext) {
           return (value as (...args: unknown[]) => unknown).apply(target, args);
@@ -101,7 +101,7 @@ function contextualClient(client: PrismaClient) {
           await installDatabaseContext(tx, activeContext);
           const fn = tx[name] as ((...inner: unknown[]) => unknown) | undefined;
           if (typeof fn !== "function") throw new Error(`Unknown database query operation ${name}`);
-          return databaseContext.run({ ...activeContext, transaction: tx }, () => fn(...args));
+          return databaseContext.run({ ...activeContext, transaction: tx }, () => fn.apply(tx, args));
         }, contextualTransactionOptions());
       };
     }

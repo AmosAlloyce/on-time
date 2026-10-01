@@ -286,6 +286,7 @@ export async function rescheduleBooking(id: string, startAt: string, calendar: C
       throw error;
     }
   }
+  if (!updated) throw conflict("The booking changed while rescheduling. Refresh and choose a new time.");
   if (shouldDrainOutboxInline()) await processBookingOutbox(id);
   return mapBooking(updated);
 }
