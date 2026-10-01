@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { SMTPServer } from "smtp-server";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/server/db";
 import { createSessionForUser, type WorkspaceAccess } from "@/server/auth/session";
 import { verifyPassword } from "@/server/auth/password";
@@ -24,6 +24,12 @@ async function fixture(label: string, role = "OWNER") {
 function linkToken(text: string) { const match = text.match(/[?#&](?:token|recovery)=([^\s]+)/); if (!match) throw new Error("token missing"); return decodeURIComponent(match[1]!); }
 
 describe("transactional email and recovery authority", () => {
+  beforeAll(async () => {
+    if (process.env.DATABASE_PROVIDER !== "postgresql") {
+      await db.$queryRawUnsafe("PRAGMA journal_mode = WAL;").catch(() => undefined);
+      await db.$queryRawUnsafe("PRAGMA busy_timeout = 30000;").catch(() => undefined);
+    }
+  });
   beforeEach(() => { process.env.AUTH_SECRET = "notification-test-auth-secret-that-is-long-enough"; process.env.EMAIL_TOKEN_SECRET = "email-test-secret-that-is-more-than-thirty-two-bytes"; process.env.TOKEN_ENCRYPTION_KEY = "00112233445566778899aabbccddeeffffeeddccbbaa99887766554433221100"; process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3000"; process.env.EMAIL_REPLY_TO = "support@example.invalid"; });
   afterEach(async () => { const owned = workspaceIds.splice(0); await db.booking.deleteMany({ where: { workspaceId: { in: owned } } }); await db.workspace.deleteMany({ where: { id: { in: owned } } }); await db.user.deleteMany({ where: { id: { in: userIds.splice(0) } } }); for (const name of ["AUTH_SECRET","EMAIL_TOKEN_SECRET","TOKEN_ENCRYPTION_KEY","NEXT_PUBLIC_APP_URL","SMTP_HOST","SMTP_PORT","SMTP_USER","SMTP_PASSWORD","EMAIL_FROM","EMAIL_REPLY_TO","EMAIL_SENDER_DOMAIN","SMTP_TLS_MODE","SMTP_ALLOW_SELF_SIGNED"]) delete process.env[name]; });
 
@@ -65,7 +71,7 @@ describe("transactional email and recovery authority", () => {
     expect(await db.accountActionToken.count({where:{userId:owner.user.id,purpose:"PASSWORD_RESET",revokedAt:null,consumedAt:null}})).toBe(1);
     expect(await db.accountActionToken.count({where:{userId:owner.user.id,purpose:"PASSWORD_RESET"}})).toBe(6);
     expect(await db.emailOutbox.count({where:{workspaceId:owner.workspace.id,kind:"PASSWORD_RESET"}})).toBe(6);
-  });
+  }, 30000);
 
   it("keeps account recovery HTTP posture identical for eligible and absent accounts",async()=>{
     resetRateLimitsForTest();const owner=await fixture("recovery-http-account");

@@ -38,7 +38,14 @@ function createDatabaseClient() {
   if (provider !== "sqlite") throw new Error("DATABASE_PROVIDER must be sqlite or postgresql.");
   process.env.DATABASE_URL = process.env.DATABASE_URL || defaultDatabaseUrl();
   const require = createRequire(import.meta.url); const local = require("@prisma/client") as { PrismaClient: new () => PrismaClient };
-  return new local.PrismaClient();
+  const client = new local.PrismaClient();
+  if (process.env.NODE_ENV !== "production") {
+    Promise.allSettled([
+      client.$queryRawUnsafe("PRAGMA journal_mode = WAL;"),
+      client.$queryRawUnsafe("PRAGMA busy_timeout = 30000;"),
+    ]).catch(() => undefined);
+  }
+  return client;
 }
 
 const baseDb = globalForPrisma.prisma ?? createDatabaseClient();
@@ -46,18 +53,66 @@ const modelNames = new Set(["user","workspace","membership","workspaceInvitation
 function contextualClient(client: PrismaClient) {
   if (process.env.DATABASE_PROVIDER !== "postgresql" || process.env.NODE_ENV !== "production" || process.env.DATABASE_ROLE === "worker") return client;
   return new Proxy(client as unknown as Record<string, unknown>, { get(target, property) {
-    const stored = currentDatabaseContext(); const name = String(property);
-    if (stored?.transaction && name in stored.transaction) { const value = stored.transaction[name]; return typeof value === "function" ? value.bind(stored.transaction) : value; }
+    const name = String(property);
     const value = target[name];
     if (name === "$transaction" && typeof value === "function") return async (operation: unknown, options?: unknown) => {
       if (typeof operation !== "function") return (value as (...args: unknown[]) => unknown).call(target, operation, options);
-      if (stored?.transaction) return operation(stored.transaction);
-      if (!stored) return (value as (...args: unknown[]) => unknown).call(target, operation, options);
-      return (value as (callback: (tx: Record<string, unknown>) => Promise<unknown>, options?: unknown) => Promise<unknown>).call(target, async (tx) => { await installDatabaseContext(tx, stored); return databaseContext.run({ ...stored, transaction: tx }, () => operation(tx)); }, contextualTransactionOptions(options));
+      const activeContext = currentDatabaseContext();
+      if (activeContext?.transaction) return operation(activeContext.transaction);
+      if (!activeContext) return (value as (...args: unknown[]) => unknown).call(target, operation, options);
+      return (value as (callback: (tx: Record<string, unknown>) => Promise<unknown>, options?: unknown) => Promise<unknown>).call(target, async (tx) => { await installDatabaseContext(tx, activeContext); return databaseContext.run({ ...activeContext, transaction: tx }, () => operation(tx)); }, contextualTransactionOptions(options));
     };
-    if (!stored) return typeof value === "function" ? value.bind(target) : value;
-    if (modelNames.has(name) && value && typeof value === "object") return new Proxy(value as Record<string, unknown>, { get(delegate, method) { const member = delegate[String(method)]; if (typeof member !== "function") return member; return (...args: unknown[]) => (target.$transaction as (callback: (tx: Record<string, unknown>) => Promise<unknown>, options?: unknown) => Promise<unknown>)(async (tx) => { await installDatabaseContext(tx, stored); const operation = (tx[name] as Record<string, (...inner: unknown[]) => unknown>)[String(method)]; if (!operation) throw new Error(`Unknown database operation ${name}.${String(method)}`); return databaseContext.run({ ...stored, transaction: tx }, () => operation(...args)); }, contextualTransactionOptions()); } });
-    if (["$queryRaw","$queryRawUnsafe","$executeRaw","$executeRawUnsafe"].includes(name) && typeof value === "function") return (...args: unknown[]) => (target.$transaction as (callback: (tx: Record<string, unknown>) => Promise<unknown>, options?: unknown) => Promise<unknown>)(async (tx) => { await installDatabaseContext(tx, stored); return databaseContext.run({ ...stored, transaction: tx }, () => (tx[name] as (...inner: unknown[]) => unknown)(...args)); }, contextualTransactionOptions());
+    if (modelNames.has(name) && value && typeof value === "object") {
+      return new Proxy(value as Record<string, unknown>, {
+        get(delegate, method) {
+          const member = delegate[String(method)];
+          if (typeof member !== "function") return member;
+          return (...args: unknown[]) => {
+            const activeContext = currentDatabaseContext();
+            if (activeContext?.transaction && name in activeContext.transaction) {
+              const txModel = activeContext.transaction[name] as Record<string, ((...inner: unknown[]) => unknown) | undefined>;
+              const fn = txModel?.[String(method)];
+              if (typeof fn === "function") {
+                return fn(...args);
+              }
+            }
+            if (!activeContext) {
+              return (member as (...inner: unknown[]) => unknown).apply(delegate, args);
+            }
+            return (target.$transaction as (callback: (tx: Record<string, unknown>) => Promise<unknown>, options?: unknown) => Promise<unknown>)(async (tx) => {
+              await installDatabaseContext(tx, activeContext);
+              const txModel = tx[name] as Record<string, ((...inner: unknown[]) => unknown) | undefined>;
+              const operation = txModel?.[String(method)];
+              if (typeof operation !== "function") throw new Error(`Unknown database operation ${name}.${String(method)}`);
+              return databaseContext.run({ ...activeContext, transaction: tx }, () => operation(...args));
+            }, contextualTransactionOptions());
+          };
+        }
+      });
+    }
+    if (["$queryRaw","$queryRawUnsafe","$executeRaw","$executeRawUnsafe"].includes(name) && typeof value === "function") {
+      return (...args: unknown[]) => {
+        const activeContext = currentDatabaseContext();
+        if (activeContext?.transaction) {
+          const fn = activeContext.transaction[name] as ((...inner: unknown[]) => unknown) | undefined;
+          if (typeof fn === "function") return fn(...args);
+        }
+        if (!activeContext) {
+          return (value as (...args: unknown[]) => unknown).apply(target, args);
+        }
+        return (target.$transaction as (callback: (tx: Record<string, unknown>) => Promise<unknown>, options?: unknown) => Promise<unknown>)(async (tx) => {
+          await installDatabaseContext(tx, activeContext);
+          const fn = tx[name] as ((...inner: unknown[]) => unknown) | undefined;
+          if (typeof fn !== "function") throw new Error(`Unknown database query operation ${name}`);
+          return databaseContext.run({ ...activeContext, transaction: tx }, () => fn(...args));
+        }, contextualTransactionOptions());
+      };
+    }
+    const activeContext = currentDatabaseContext();
+    if (activeContext?.transaction && name in activeContext.transaction) {
+      const txValue = activeContext.transaction[name];
+      return typeof txValue === "function" ? txValue.bind(activeContext.transaction) : txValue;
+    }
     return typeof value === "function" ? value.bind(target) : value;
   } }) as unknown as PrismaClient;
 }

@@ -19,7 +19,12 @@ export function apiError(error: unknown) {
       { status: error.status },
     );
   }
-  console.error("Unhandled API error", error);
+  if (error && typeof error === "object" && ("code" in error || "message" in error)) {
+    const err = error as { code?: unknown; message?: unknown; meta?: unknown };
+    console.error("Unhandled API error:", err.code || "NO_CODE", err.message || error, err.meta ? JSON.stringify(err.meta) : "");
+  } else {
+    console.error("Unhandled API error", error);
+  }
   return NextResponse.json({ error: { code: "INTERNAL_ERROR", message: "Something went wrong." } }, { status: 500 });
 }
 

@@ -46,7 +46,7 @@
     "release:stage": "node scripts/stage-public-release.mjs",
     "start": "npm run start --workspace @ontime/web",
     "lint": "eslint apps/web",
-    "typecheck": "tsc --project apps/web/tsconfig.json --noEmit",
+    "typecheck": "cross-env NODE_OPTIONS=--max-old-space-size=2560 tsc --project apps/web/tsconfig.json --noEmit",
     "test": "vitest run",
     "test:resilience": "vitest run apps/web/src/server/quality/resilience.test.ts apps/web/src/server/services/outbox.test.ts apps/web/src/server/services/notifications.test.ts apps/web/src/server/infrastructure.test.ts apps/web/src/server/rate-limit.test.ts",
     "test:e2e": "node scripts/playwright-matrix.mjs",
@@ -66,7 +66,7 @@
     "db:migrate:postgres": "node scripts/production-config.mjs migration && prisma migrate deploy --schema prisma/postgresql/schema.prisma",
     "db:migrate": "cross-env DATABASE_URL=file:./dev.db prisma migrate deploy",
     "db:seed": "cross-env DATABASE_URL=file:./dev.db tsx prisma/seed.ts",
-    "db:reset": "cross-env DATABASE_URL=file:./dev.db prisma migrate reset --force"
+    "db:reset": "cross-env DATABASE_URL=file:./dev.db prisma migrate reset --force && node scripts/sqlite-wal.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

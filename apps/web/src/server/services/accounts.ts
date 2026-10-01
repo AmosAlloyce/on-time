@@ -3,7 +3,7 @@ import type { AccountSummary, RegistrationInput, WorkspaceInvitation, WorkspaceM
 import { db } from "@/server/db";
 import { AppError, conflict, notFound } from "@/server/errors";
 import { hashPassword, verifyPassword } from "@/server/auth/password";
-import { enterBootstrapDatabaseContext, enterCapabilityDatabaseContext,enterDatabaseAction } from "@/server/db-context";
+import { enterBootstrapDatabaseContext, enterCapabilityDatabaseContext, enterDatabaseAction, enterWorkspaceDatabaseContext } from "@/server/db-context";
 import { createSessionToken, readSessionToken, sessionTokenHash, type WorkspaceAccess } from "@/server/auth/session";
 import { mapUser } from "@/server/mappers";
 import { canonicalizeImageDataUrl } from "@/server/image-ingestion";
@@ -14,6 +14,7 @@ function mapWorkspaceMembership(membership: { role: string; workspace: { id: str
 }
 
 export async function getAccountSummary(access: WorkspaceAccess): Promise<AccountSummary> {
+  enterWorkspaceDatabaseContext(access.workspaceId, access.user.id, access.role, access.sessionHash, "workspace_read");
   const [memberships, members] = await Promise.all([
     db.membership.findMany({ where: { userId: access.user.id, status: "ACTIVE" }, include: { workspace: true }, orderBy: { createdAt: "asc" } }),
     db.membership.findMany({ where: { workspaceId: access.workspaceId }, include: { user: true }, orderBy: [{ role: "asc" }, { createdAt: "asc" }] }),
@@ -29,7 +30,7 @@ export async function getAccountSummary(access: WorkspaceAccess): Promise<Accoun
 }
 
 export async function updateProfileImage(access: WorkspaceAccess, imageUrl: string | null) {
-  enterDatabaseAction("account_write");
+  enterWorkspaceDatabaseContext(access.workspaceId, access.user.id, access.role, access.sessionHash, "account_write");
   const canonicalImage = imageUrl === null ? null : await canonicalizeImageDataUrl(imageUrl, "imageUrl");
   const user = await db.user.update({ where: { id: access.user.id }, data: { imageUrl: canonicalImage } });
   return mapUser(user);
@@ -61,7 +62,7 @@ export async function registerAccount(input: RegistrationInput, observeWork: (ph
 }
 
 export async function changeAccountPassword(access: WorkspaceAccess, currentPassword: string, newPassword: string) {
-  enterDatabaseAction("account_write");
+  enterWorkspaceDatabaseContext(access.workspaceId, access.user.id, access.role, access.sessionHash, "account_write");
   if (!await verifyPassword(currentPassword, access.user.passwordHash)) throw new AppError("AUTHENTICATION_FAILED", "The account request could not be completed.", 401);
   const passwordHash = await hashPassword(newPassword); const token = createSessionToken(access.user.id); const payload = readSessionToken(token)!; const now = new Date();
   await db.$transaction(async (tx) => {
@@ -74,7 +75,7 @@ export async function changeAccountPassword(access: WorkspaceAccess, currentPass
 }
 
 export async function completeWorkspaceOnboarding(access: WorkspaceAccess) {
-  enterDatabaseAction("workspace_update");
+  enterWorkspaceDatabaseContext(access.workspaceId, access.user.id, access.role, access.sessionHash, "workspace_update");
   await db.workspace.update({ where: { id: access.workspaceId }, data: { onboardingCompletedAt: new Date() } });
 }
 
@@ -83,7 +84,7 @@ export async function listWorkspaceInvitations(workspaceId: string): Promise<Wor
 }
 
 export async function createWorkspaceInvitation(access: WorkspaceAccess, email: string, role: "ADMIN" | "MEMBER") {
-  enterDatabaseAction("invitation_write");
+  enterWorkspaceDatabaseContext(access.workspaceId, access.user.id, access.role, access.sessionHash, "invitation_write");
   const normalized = email.toLowerCase(); const newId = randomBytes(18).toString("base64url");
   await db.$transaction(async (tx) => {
     const actor = await tx.membership.findFirst({ where: { id: access.membership.id, workspaceId: access.workspaceId, userId: access.user.id, status: "ACTIVE", role: { in: ["OWNER","ADMIN"] } } });
@@ -129,7 +130,7 @@ export async function acceptWorkspaceInvitation(access: WorkspaceAccess, token: 
 }
 
 export async function updateMembershipRole(access: WorkspaceAccess, membershipId: string, role: WorkspaceRole, status: "ACTIVE" | "REMOVED") {
-  enterDatabaseAction("membership_change");
+  enterWorkspaceDatabaseContext(access.workspaceId, access.user.id, access.role, access.sessionHash, "membership_change");
   await db.$transaction(async (tx) => {
     const actor = await tx.membership.findFirst({ where: { id: access.membership.id, workspaceId: access.workspaceId, userId: access.user.id, role: "OWNER", status: "ACTIVE" } });
     if (!actor) throw new AppError("FORBIDDEN", "You do not have access to this workspace action.", 403);
