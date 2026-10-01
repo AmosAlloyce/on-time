@@ -1,7 +1,11 @@
-
+<div align="center">
   <h1>On-Time</h1>
   <p><strong>On Time all the time.</strong></p>
   <p>An autonomous, self-hostable appointment scheduling platform with verified TLS, Row-Level Security, multi-tenant isolation, Google Calendar sync, Stripe test payments, and transactional email dispatch.</p>
+
+  <p>
+    <a href="https://github.com/AmosAlloyce/on-time/actions/workflows/ci.yml"><img src="https://github.com/AmosAlloyce/on-time/actions/workflows/ci.yml/badge.svg" alt="On-Time CI" /></a>
+  </p>
 
   <p>
     <a href="https://ontime.alloyce.duckdns.org/dashboard"><strong>Live Dashboard</strong></a> •
